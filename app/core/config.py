@@ -28,20 +28,16 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("clip_image_model_name", "clip_model_name"),
     )
     clip_text_model_name: str = "clip-ViT-B-32-multilingual-v1"
-    embedding_dimensions: int = 512
     index_batch_size: int = 32
     search_min_score: float = 0.25
     search_recall_size: int = 200
     search_return_size: int = 60
-    search_rerank_enabled: bool = True
-    search_max_results: int = 2000
     search_hnsw_ef_search: int = 1000
+    search_hybrid_rrf_k: int = 60
     nsfw_filter_enabled: bool = True
     nsfw_max_score: float = 0.6
     nsfw_model_name: str = "Falconsai/nsfw_image_detection"
     nsfw_batch_size: int = 16
-    search_hybrid_enabled: bool = True
-    search_hybrid_rrf_k: int = 60
     llm_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "LLM_APY_KEY"),
@@ -56,7 +52,6 @@ class Settings(BaseSettings):
     llm_image_max_size: int = 512
     llm_image_quality: int = 85
     llm_image_detail: str = "low"
-    llm_batch_size: int = 4
     llm_request_timeout: float = 60.0
 
     @property

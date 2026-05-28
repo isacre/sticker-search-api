@@ -167,36 +167,6 @@ def _log_retry(path: Path, *, attempt: int, delay: float, status: int) -> None:
     logger.warning(msg)
 
 
-def _post_with_retry_sync(
-    client: httpx.Client,
-    payload: dict,
-    *,
-    path: Path,
-) -> LlmTagResult:
-    last_response: httpx.Response | None = None
-    for attempt in range(settings.llm_max_retries + 1):
-        response = client.post(
-            _chat_completions_url(),
-            headers=_llm_headers(),
-            json=payload,
-        )
-        if response.status_code not in _RETRYABLE_STATUS:
-            response.raise_for_status()
-            return _parse_response(response.json(), path=path)
-
-        last_response = response
-        if attempt >= settings.llm_max_retries:
-            break
-
-        delay = retry_delay_seconds(response, attempt)
-        _log_retry(path, attempt=attempt + 1, delay=delay, status=response.status_code)
-        time.sleep(delay)
-
-    assert last_response is not None
-    last_response.raise_for_status()
-    return _parse_response(last_response.json(), path=path)
-
-
 async def _post_with_retry_async(
     client: httpx.AsyncClient,
     payload: dict,
@@ -228,21 +198,6 @@ async def _post_with_retry_async(
     return _parse_response(last_response.json(), path=path)
 
 
-def generate_tags_for_image(
-    path: Path,
-    *,
-    client: httpx.Client | None = None,
-) -> LlmTagResult:
-    _ensure_llm_enabled()
-    payload = _build_payload(_prepare_image_data_url(path))
-
-    if client is None:
-        with httpx.Client(timeout=settings.llm_request_timeout) as owned:
-            return _post_with_retry_sync(owned, payload, path=path)
-
-    return _post_with_retry_sync(client, payload, path=path)
-
-
 async def generate_tags_for_image_async(
     path: Path,
     client: httpx.AsyncClient,
@@ -250,28 +205,3 @@ async def generate_tags_for_image_async(
     _ensure_llm_enabled()
     payload = _build_payload(_prepare_image_data_url(path))
     return await _post_with_retry_async(client, payload, path=path)
-
-
-async def generate_tags_parallel(
-    paths: list[Path],
-    *,
-    concurrency: int | None = None,
-) -> list[tuple[Path, LlmTagResult | BaseException]]:
-    if not paths:
-        return []
-
-    workers = concurrency or settings.llm_concurrency
-    semaphore = asyncio.Semaphore(max(1, workers))
-    timeout = httpx.Timeout(settings.llm_request_timeout)
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-
-        async def _run(path: Path) -> tuple[Path, LlmTagResult | BaseException]:
-            async with semaphore:
-                try:
-                    result = await generate_tags_for_image_async(path, client)
-                    return path, result
-                except BaseException as exc:
-                    return path, exc
-
-        return list(await asyncio.gather(*(_run(path) for path in paths)))

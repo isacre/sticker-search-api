@@ -1,4 +1,4 @@
-.PHONY: help install sync dev run test lint format clean db-up db-down db-logs db-migrate db-reset reindex index classify-nsfw tag
+.PHONY: help sync dev run test lint format clean db-up db-down db-logs db-migrate db-reset reindex index tag
 
 UV      ?= uv
 APP     ?= app.main:app
@@ -9,8 +9,6 @@ PORT    ?= 8000
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
-
-install: sync ## Instala dependências (alias de sync)
 
 sync: ## Sincroniza o ambiente com uv.lock
 	$(UV) sync --all-groups
@@ -45,20 +43,16 @@ db-down: ## Para o Postgres
 db-logs: ## Logs do Postgres
 	docker compose -f ../docker-compose.yml logs -f postgres
 
-db-migrate: ## Aplica migrações incrementais (NSFW + tags)
-	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/02-nsfw.sql
+db-migrate: ## Aplica migração de tags (DBs antigos sem sticker_tags)
 	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/03-tags.sql
 
 db-reset: ## Zera stickers + tags no banco
-	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/04-truncate.sql
+	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/scripts/truncate.sql
 
-reindex: db-reset index ## Zera o banco e indexa só STICKERS_DIR
+reindex: db-reset index ## Zera o banco e indexa STICKERS_DIR
 
 index: ## Indexa figurinhas (STICKERS_DIR) no pgvector
 	$(UV) run python -m app.scripts.index_stickers
-
-classify-nsfw: ## Classifica NSFW em stickers já indexados
-	$(UV) run python -m app.scripts.classify_nsfw
 
 tag: ## Gera tags PT/EN via LLM (usa LLM_CONCURRENCY do .env)
 	$(UV) run python -m app.scripts.tag_stickers

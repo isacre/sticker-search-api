@@ -1,6 +1,6 @@
 from pathlib import Path
 
-IMAGE_EXTENSIONS = {".webp", ".png", ".jpg", ".jpeg", ".gif"}
+from app.services.embeddings import IMAGE_EXTENSIONS
 
 
 class StickerCatalog:
@@ -18,15 +18,8 @@ class StickerCatalog:
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
         )
 
-    @property
-    def total(self) -> int:
-        return len(self._names)
-
     def slice(self, offset: int, limit: int) -> list[str]:
         return self._names[offset : offset + limit]
-
-    def contains(self, name: str) -> bool:
-        return name in self._names
 
 
 catalog = StickerCatalog()

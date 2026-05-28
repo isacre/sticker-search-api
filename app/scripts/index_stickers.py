@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from app.core.config import settings
 from app.db.pool import close_pool, init_pool
-from app.services.embeddings import encode_images, load_image_rgb
-from app.services.nsfw import score_images
-from app.services.vector_store import list_image_paths, upsert_batch
+from app.services.indexing import index_paths
+from app.services.vector_store import list_image_paths
 
 
 def index_directory(
-    directory=None,
+    directory: Path | None = None,
     *,
     batch_size: int | None = None,
 ) -> int:
@@ -26,19 +26,10 @@ def index_directory(
         return 0
 
     init_pool()
-    total = 0
-
-    for start in range(0, len(paths), batch_size):
-        chunk = paths[start : start + batch_size]
-        images = [load_image_rgb(path) for path in chunk]
-        embeddings = encode_images(images, batch_size=batch_size)
-        nsfw_scores = score_images(images)
-        filenames = [path.name for path in chunk]
-        upsert_batch(filenames, embeddings, nsfw_scores=nsfw_scores)
-        total += len(chunk)
-        print(f"Indexed {total}/{len(paths)}", flush=True)
-
-    return total
+    total = len(paths)
+    indexed = index_paths(paths, batch_size=batch_size)
+    print(f"Indexed {indexed}/{total}", flush=True)
+    return indexed
 
 
 def main() -> None:
@@ -62,8 +53,6 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from pathlib import Path
-
         directory = Path(args.dir) if args.dir else settings.stickers_dir
         count = index_directory(directory, batch_size=args.batch_size)
         print(f"Done. {count} stickers indexed.")

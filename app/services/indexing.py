@@ -23,7 +23,3 @@ def index_paths(paths: list[Path], *, batch_size: int | None = None) -> int:
         total += len(chunk)
 
     return total
-
-
-def index_single(path: Path, *, batch_size: int | None = None) -> None:
-    index_paths([path], batch_size=batch_size)

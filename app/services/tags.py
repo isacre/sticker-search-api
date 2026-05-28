@@ -2,7 +2,6 @@ import re
 import unicodedata
 
 from app.db.pool import get_pool
-from app.schemas.tags import StickerTags, StickerTagsBySource
 
 _TAG_SPLIT_RE = re.compile(r"[,;\n]+")
 _MAX_TAG_LEN = 80
@@ -27,13 +26,6 @@ def normalize_tags(tags: list[str]) -> list[str]:
     return out
 
 
-def parse_tag_form_values(values: list[str]) -> list[str]:
-    parsed: list[str] = []
-    for value in values:
-        parsed.extend(_TAG_SPLIT_RE.split(value))
-    return normalize_tags(parsed)
-
-
 def get_sticker_id(filename: str) -> int | None:
     with get_pool().connection() as conn:
         with conn.cursor() as cur:
@@ -42,50 +34,12 @@ def get_sticker_id(filename: str) -> int | None:
     return int(row[0]) if row else None
 
 
-def replace_manual_tags(
-    filename: str,
-    *,
-    tags_pt: list[str],
-    tags_en: list[str],
-) -> StickerTagsBySource:
-    sticker_id = get_sticker_id(filename)
-    if sticker_id is None:
-        msg = f"Sticker not indexed: {filename}"
-        raise LookupError(msg)
-
-    pt = normalize_tags(tags_pt)
-    en = normalize_tags(tags_en)
-
-    with get_pool().connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM sticker_tags WHERE sticker_id = %s AND source = 'manual'",
-                (sticker_id,),
-            )
-            rows = [
-                (sticker_id, tag, lang, "manual")
-                for lang, tags in (("pt", pt), ("en", en))
-                for tag in tags
-            ]
-            if rows:
-                cur.executemany(
-                    """
-                    INSERT INTO sticker_tags (sticker_id, tag, lang, source)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (sticker_id, tag, lang, source) DO NOTHING
-                    """,
-                    rows,
-                )
-
-    return fetch_tags(filename)
-
-
 def replace_llm_tags(
     filename: str,
     *,
     tags_pt: list[str],
     tags_en: list[str],
-) -> StickerTagsBySource:
+) -> None:
     sticker_id = get_sticker_id(filename)
     if sticker_id is None:
         msg = f"Sticker not indexed: {filename}"
@@ -115,72 +69,6 @@ def replace_llm_tags(
                     rows,
                 )
 
-    return fetch_tags(filename)
-
-
-def fetch_tags(filename: str) -> StickerTagsBySource:
-    sticker_id = get_sticker_id(filename)
-    if sticker_id is None:
-        return StickerTagsBySource()
-
-    with get_pool().connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT tag, lang, source
-                FROM sticker_tags
-                WHERE sticker_id = %s
-                ORDER BY tag
-                """,
-                (sticker_id,),
-            )
-            rows = cur.fetchall()
-
-    manual = StickerTags()
-    llm = StickerTags()
-    for tag, lang, source in rows:
-        bucket = manual if source == "manual" else llm
-        if lang == "pt":
-            bucket.pt.append(tag)
-        else:
-            bucket.en.append(tag)
-    return StickerTagsBySource(manual=manual, llm=llm)
-
-
-def fetch_tags_bulk(filenames: list[str]) -> dict[str, StickerTagsBySource]:
-    if not filenames:
-        return {}
-
-    with get_pool().connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT s.filename, t.tag, t.lang, t.source
-                FROM stickers s
-                JOIN sticker_tags t ON t.sticker_id = s.id
-                WHERE s.filename = ANY(%s)
-                ORDER BY s.filename, t.tag
-                """,
-                (filenames,),
-            )
-            rows = cur.fetchall()
-
-    out: dict[str, StickerTagsBySource] = {}
-    for filename, tag, lang, source in rows:
-        name = str(filename)
-        if name not in out:
-            out[name] = StickerTagsBySource()
-        bucket = out[name].manual if source == "manual" else out[name].llm
-        if lang == "pt":
-            bucket.pt.append(str(tag))
-        else:
-            bucket.en.append(str(tag))
-
-    for name in filenames:
-        out.setdefault(name, StickerTagsBySource())
-
-    return out
-
 
 def list_filenames_without_llm_tags() -> list[str]:
     with get_pool().connection() as conn:
@@ -201,8 +89,7 @@ def list_filenames_without_llm_tags() -> list[str]:
 
 
 def search_terms_from_query(query: str) -> list[str]:
-    terms = normalize_tags([query, *query.split()])
-    return terms
+    return normalize_tags([query, *query.split()])
 
 
 def search_by_tags(

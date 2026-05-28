@@ -37,14 +37,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/")
-    def root() -> dict[str, str]:
-        return {"message": "ok"}
-
-    @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
-
     app.include_router(api_router, prefix=settings.api_prefix)
     app.mount(
         "/stickers",

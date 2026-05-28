@@ -14,12 +14,4 @@ class StickerSearchItem(BaseModel):
 
 
 class StickerSearchResponse(BaseModel):
-    query: str
-    total_indexed: int
     items: list[StickerSearchItem]
-
-
-class SearchIndexStatus(BaseModel):
-    enabled: bool
-    indexed: int
-    ready: bool

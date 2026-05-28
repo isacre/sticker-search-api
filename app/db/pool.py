@@ -1,7 +1,6 @@
+from app.core.config import settings
 from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
-
-from app.core.config import settings
 
 _pool: ConnectionPool | None = None
 

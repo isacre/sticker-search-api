@@ -6,10 +6,9 @@ from app.db.pool import get_pool
 from app.services.embeddings import IMAGE_EXTENSIONS
 
 UPSERT_SQL = """
-INSERT INTO stickers (filename, pack_id, embedding, nsfw_score)
-VALUES (%s, %s, %s, %s)
+INSERT INTO stickers (filename, embedding, nsfw_score)
+VALUES (%s, %s, %s)
 ON CONFLICT (filename) DO UPDATE SET
-    pack_id = EXCLUDED.pack_id,
     embedding = EXCLUDED.embedding,
     nsfw_score = EXCLUDED.nsfw_score,
     updated_at = now()
@@ -30,21 +29,19 @@ LIMIT %s
 def upsert_batch(
     filenames: list[str],
     embeddings: np.ndarray,
-    pack_ids: list[str | None] | None = None,
     nsfw_scores: list[float | None] | None = None,
 ) -> int:
     if len(filenames) != len(embeddings):
         msg = "filenames and embeddings length mismatch"
         raise ValueError(msg)
 
-    pack_ids = pack_ids or [None] * len(filenames)
     nsfw_scores = nsfw_scores or [None] * len(filenames)
     if len(nsfw_scores) != len(filenames):
         msg = "filenames and nsfw_scores length mismatch"
         raise ValueError(msg)
 
     rows = list(
-        zip(filenames, pack_ids, embeddings.tolist(), nsfw_scores, strict=True),
+        zip(filenames, embeddings.tolist(), nsfw_scores, strict=True),
     )
 
     with get_pool().connection() as conn:
@@ -109,23 +106,6 @@ def search(
         (str(filename), float(score), float(nsfw) if nsfw is not None else None)
         for filename, score, nsfw in rows
     ]
-
-
-def update_nsfw_scores(updates: list[tuple[str, float]]) -> int:
-    if not updates:
-        return 0
-
-    with get_pool().connection() as conn:
-        with conn.cursor() as cur:
-            cur.executemany(
-                """
-                UPDATE stickers
-                SET nsfw_score = %s, updated_at = now()
-                WHERE filename = %s
-                """,
-                [(score, filename) for filename, score in updates],
-            )
-    return len(updates)
 
 
 FETCH_NSFW_SQL = """
