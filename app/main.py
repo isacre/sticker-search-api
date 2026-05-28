@@ -7,13 +7,19 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.db.pool import close_pool, init_pool
+from app.services.embeddings import warmup_models
 from app.services.stickers import catalog
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     catalog.load(settings.stickers_dir)
+    if settings.search_enabled:
+        init_pool()
+        warmup_models()
     yield
+    close_pool()
 
 
 def create_app() -> FastAPI:

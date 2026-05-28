@@ -1,10 +1,6 @@
 from pathlib import Path
 
-from app.main import app
 from app.services.stickers import StickerCatalog, catalog
-from fastapi.testclient import TestClient
-
-client = TestClient(app)
 
 
 def test_catalog_slice() -> None:
@@ -23,7 +19,7 @@ def test_catalog_slice() -> None:
     (tmp / "b.webp").unlink(missing_ok=True)
 
 
-def test_list_stickers_after_catalog_load() -> None:
+def test_list_stickers_after_catalog_load(client) -> None:
     catalog.load(Path(__file__).resolve().parents[2] / "stickers")
     response = client.get("/api/v1/stickers?offset=0&limit=2")
     assert response.status_code == 200

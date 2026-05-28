@@ -1,4 +1,4 @@
-.PHONY: help install sync dev run test lint format clean
+.PHONY: help install sync dev run test lint format clean db-up db-down db-logs db-migrate db-reset reindex index classify-nsfw tag
 
 UV      ?= uv
 APP     ?= app.main:app
@@ -35,3 +35,30 @@ clean: ## Remove caches Python
 	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -prune -exec rm -rf {} + 2>/dev/null || true
+
+db-up: ## Sobe Postgres + pgvector (docker compose na raiz)
+	docker compose -f ../docker-compose.yml up -d postgres
+
+db-down: ## Para o Postgres
+	docker compose -f ../docker-compose.yml down
+
+db-logs: ## Logs do Postgres
+	docker compose -f ../docker-compose.yml logs -f postgres
+
+db-migrate: ## Aplica migrações incrementais (NSFW + tags)
+	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/02-nsfw.sql
+	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/03-tags.sql
+
+db-reset: ## Zera stickers + tags no banco
+	PGPASSWORD=sticker psql -h localhost -p 5433 -U sticker -d sticker_search -f ../db/init/04-truncate.sql
+
+reindex: db-reset index ## Zera o banco e indexa só STICKERS_DIR
+
+index: ## Indexa figurinhas (STICKERS_DIR) no pgvector
+	$(UV) run python -m app.scripts.index_stickers
+
+classify-nsfw: ## Classifica NSFW em stickers já indexados
+	$(UV) run python -m app.scripts.classify_nsfw
+
+tag: ## Gera tags PT/EN via LLM (usa LLM_CONCURRENCY do .env)
+	$(UV) run python -m app.scripts.tag_stickers

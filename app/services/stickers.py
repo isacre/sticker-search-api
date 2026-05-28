@@ -25,5 +25,8 @@ class StickerCatalog:
     def slice(self, offset: int, limit: int) -> list[str]:
         return self._names[offset : offset + limit]
 
+    def contains(self, name: str) -> bool:
+        return name in self._names
+
 
 catalog = StickerCatalog()
